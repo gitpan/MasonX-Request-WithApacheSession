@@ -5,19 +5,13 @@ use strict;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.25';
+$VERSION = '0.30';
 
-use Apache::Session;
+use Apache::Session::Wrapper 0.13;
 
 use HTML::Mason 1.16;
 use HTML::Mason::Exceptions ( abbr => [ qw( param_error error ) ] );
 use HTML::Mason::Request;
-
-use Exception::Class ( 'HTML::Mason::Exception::NonExistentSessionID' =>
-		       { isa => 'HTML::Mason::Exception',
-			 description => 'A non-existent session id was used',
-			 fields => [ 'session_id' ] },
-		     );
 
 use Params::Validate qw(:all);
 Params::Validate::validation_options( on_fail => sub { param_error( join '', @_ ) } );
@@ -25,261 +19,47 @@ Params::Validate::validation_options( on_fail => sub { param_error( join '', @_ 
 # This may change later
 @ISA = qw(HTML::Mason::Request);
 
-my %params =
-    ( session_always_write =>
-      { type => BOOLEAN,
-	default => 1,
-	descr => 'Whether or not to force a write before the session goes out of scope' },
 
-      session_allow_invalid_id =>
-      { type => BOOLEAN,
-	default => 1,
-	descr => 'Whether or not to allow a failure to find an existing session id' },
+#
+# This is a bit of a hack, ideally we could do this:
+#
+#   __PACKAGE__->contained_objects( class  => 'Apache::Session::Wrapper',
+#                                   prefix => 'session_',
+#                                 );
+#
+# and let Class::Container sort it all out.  We'd also need a way to
+# override some of the contained class's defaults.
+#
+my $wrapper_p = Apache::Session::Wrapper->valid_params;
 
-      session_args_param =>
-      { type => SCALAR,
-	default => undef,
-	descr => 'Name of the parameter to use for session tracking' },
-
-      session_use_cookie =>
-      { type => BOOLEAN,
-	default => 0,
-	descr => 'Whether or not to use a cookie to track the session' },
-
-      session_cookie_name =>
-      { type => SCALAR,
-	default => 'MasonX-Request-WithApacheSession-cookie',
-	descr => 'Name of cookie used by this module' },
-
-      session_cookie_expires =>
-      { type => UNDEF | SCALAR,
-	default => '+1d',
-	descr => 'Expiration time for cookies' },
-
-      session_cookie_domain =>
-      { type => UNDEF | SCALAR,
-	default => undef,
-	descr => 'Domain parameter for cookies' },
-
-      session_cookie_path =>
-      { type => SCALAR,
-	default => '/',
-	descr => 'Path for cookies' },
-
-      session_cookie_secure =>
-      { type => BOOLEAN,
-	default => 0,
-	descr => 'Are cookies sent only for SSL connections?' },
-
-      session_cookie_resend =>
-      { type => BOOLEAN,
-	default => 1,
-	descr => 'Resend the cookie on each request?' },
-
-      session_class =>
-      { type => SCALAR,
-	descr => 'An Apache::Session class to use for sessions' },
-
-      session_data_source =>
-      { type => SCALAR,
-	optional => 1,
-	descr => 'The data source when using MySQL or PostgreSQL' },
-
-      session_user_name =>
-      { type => UNDEF | SCALAR,
-	default => undef,
-	descr => 'The user name to be used when connecting to a database' },
-
-      session_password =>
-      { type => UNDEF | SCALAR,
-	default => undef,
-	descr => 'The password to be used when connecting to a database' },
-
-      session_lock_data_source =>
-      { type => SCALAR,
-	optional => 1,
-	descr => 'The data source when using MySQL or PostgreSQL' },
-
-      session_lock_user_name =>
-      { type => UNDEF | SCALAR,
-        default => undef,
-	descr => 'The user name to be used when connecting to a database' },
-
-      session_lock_password =>
-      { type => UNDEF | SCALAR,
-	default => undef,
-	descr => 'The password to be used when connecting to a database' },
-
-      session_handle =>
-      { type => OBJECT,
-        optional => 1,
-	descr => 'An existing database handle to use' },
-
-      session_lock_handle =>
-      { type => OBJECT,
-        optional => 1,
-	descr => 'An existing database handle to use' },
-
-      session_commit =>
-      { type => BOOLEAN,
-        default => 1,
-	descr => 'Whether or not to auto-commit changes to the database' },
-
-      session_transaction =>
-      { type => BOOLEAN,
-	default => 0,
-	descr => 'The Transaction flag for Apache::Session' },
-
-      session_directory =>
-      { type => SCALAR,
-	default => undef,
-	descr => 'A directory to use when storing sessions' },
-
-      session_lock_directory =>
-      { type => SCALAR,
-	default => undef,
-	descr => 'A directory to use for locking when storing sessions' },
-
-      session_file_name =>
-      { type => SCALAR,
-	optional => 1,
-	descr => 'A DB_File to use' },
-
-      session_store =>
-      { type => SCALAR,
-	optional => 1,
-	descr => 'A storage class to use with the Flex module' },
-
-      session_lock =>
-      { type => SCALAR,
-	optional => 1,
-	descr => 'A locking class to use with the Flex module' },
-
-      session_generate =>
-      { type => SCALAR,
-	default => 'MD5',
-	descr => 'A session generator class to use with the Flex module' },
-
-      session_serialize =>
-      { type => SCALAR,
-	optional => 1,
-	descr => 'A serialization class to use with the Flex module' },
-
-      session_textsize =>
-      { type => SCALAR,
-	optional => 1,
-	descr => 'A parameter for the Sybase storage module' },
-
-      session_long_read_len =>
-      { type => SCALAR,
-	optional => 1,
-	descr => 'A parameter for the Oracle storage module' },
-
-      session_n_sems =>
-      { type => SCALAR,
-	optional => 1,
-	descr => 'A parameter for the Semaphore locking module' },
-
-      session_semaphore_key =>
-      { type => SCALAR,
-	optional => 1,
-	descr => 'A parameter for the Semaphore locking module' },
-
-      session_mod_usertrack_cookie_name =>
-      { type => SCALAR,
-	optional => 1,
-	descr => 'The cookie name used by mod_usertrack' },
-
-      session_save_path =>
-      { type => SCALAR,
-	optional => 1,
-	descr => 'Path used by Apache::Session::PHP' },
-
-    );
-
-__PACKAGE__->valid_params(%params);
-
-# What set of parameters are required for each session class.
-# Multiple array refs represent multiple possible sets of parameters
-my %ApacheSessionParams =
-    ( Flex     => [ [ qw( store lock generate serialize ) ] ],
-      MySQL    => [ [ qw( data_source user_name password
-                          lock_data_source lock_user_name lock_password ) ],
-		    [ qw( handle lock_handle ) ] ],
-      Postgres => [ [ qw( data_source user_name password commit ) ],
-		    [ qw( handle commit ) ] ],
-      File     => [ [ qw( directory lock_directory ) ] ],
-      DB_File  => [ [ qw( file_name lock_directory ) ] ],
-
-      PHP      => [ [ qw( save_path ) ] ],
-    );
-
-$ApacheSessionParams{Oracle} =
-      $ApacheSessionParams{Sybase} =
-      $ApacheSessionParams{Postgres};
-
-my %OptionalApacheSessionParams =
-    ( Sybase => [ [ qw( textsize ) ] ],
-      Oracle => [ [ qw( long_read_len ) ] ],
-    );
-
-my %ApacheSessionFlexParams =
-    ( store =>
-      { MySQL    => [ [ qw( data_source user_name password ) ],
-		      [ qw( handle ) ] ],
-	Postgres => $ApacheSessionParams{Postgres},
-	File     => [ [ qw( directory ) ] ],
-	DB_File  => [ [ qw( file_name ) ] ],
-      },
-      lock =>
-      { MySQL     => [ [ qw( lock_data_source lock_user_name lock_password ) ],
-		       [ qw( lock_handle ) ] ],
-	File      => [ [ ] ],
-	Null      => [ [ ] ],
-	Semaphore => [ [ ] ],
-      },
-      generate =>
-      { MD5          => [ [ ] ],
-	ModUniqueId  => [ [ ] ],
-	ModUsertrack => [ [ qw( mod_usertrack_cookie_name )  ] ],
-      },
-      serialize =>
-      { Storable => [ [ ] ],
-	Base64   => [ [ ] ],
-	UUEncode => [ [ ] ],
-      },
-    );
-
-$ApacheSessionFlexParams{store}{Oracle} =
-      $ApacheSessionFlexParams{store}{Sybase} =
-      $ApacheSessionFlexParams{store}{Postgres};
-
-my %OptionalApacheSessionFlexParams =
-    ( Sybase => { store => [ qw( textsize ) ] },
-      Oracle => { store => [ qw( long_read_len ) ] },
-    );
-
-sub _studly_form
 {
-    my $string = shift;
-    $string =~ s/(?:^|_)(\w)/\U$1/g;
-    return $string;
+    my %p = map { ( "session_$_" => $wrapper_p->{$_} ) } keys %$wrapper_p;
+    foreach my $k ( grep { exists $p{$_}{depends} } keys %p )
+    {
+        my %new = %{ $p{$k} };
+
+        my @d = ref $new{depends} ? @{ $new{depends} } : $new{depends};
+        $new{depends} = [ map { ( "session_$_" ) } @d ];
+
+        $p{$k} = \%new;
+    }
+
+    $p{session_cookie_name}{default} = 'MasonX-Request-WithApacheSession-cookie';
+
+    # We'll always provide this, so the user doesn't need to.
+    delete $p{session_param_name}{depends};
+
+    __PACKAGE__->valid_params
+        ( # This is for backwards compatibility, it's been renamed to
+          # param_name
+          session_args_param =>
+          { type => SCALAR,
+            optional => 1,
+            descr => 'Name of the parameter to use for session tracking',
+          },
+          %p,
+        );
 }
-
-my %StudlyForm =
-    ( map { $_ => _studly_form($_) }
-      map { ref $_ ? @$_ :$_ }
-      map { @$_ }
-      ( values %ApacheSessionParams ),
-      ( values %OptionalApacheSessionParams ),
-      ( map { values %{ $ApacheSessionFlexParams{$_} } }
-	keys %ApacheSessionFlexParams ),
-      ( map { values %{ $OptionalApacheSessionFlexParams{$_} } }
-	keys %OptionalApacheSessionFlexParams ),
-    );
-
-# why Apache::Session does this I do not know
-$StudlyForm{textsize} = 'textsize';
 
 sub new
 {
@@ -296,308 +76,40 @@ sub new
 
     return if $self->is_subrequest;
 
-    $self->_check_session_params;
-    $self->_set_session_params;
+    # backwards compatibility
+    $self->{session_param_name} =
+        $self->{session_args_param} if exists $self->{session_args_param};
 
-    eval "require Apache::Session::$self->{session_class_piece}";
-    die $@ if $@;
+    my %extra;
+    if ( $self->can('apache_req') )
+    {
+        %extra = ( header_object => $self->apache_req,
+                   param_object  => $self->apache_req,
+                 );
+    }
+    elsif ( $self->can('cgi_object') )
+    {
+        %extra = ( header_object => $self->cgi_object,
+                   param_object  => $self->cgi_object,
+                 );
+    }
 
-    $self->_make_session;
-
-    $self->_bake_cookie
-        if $self->{session_use_cookie} && ! $self->{session_cookie_is_baked};
+    $self->{apache_session_wrapper} =
+        Apache::Session::Wrapper->new
+            ( %extra,
+              map { $_ => $self->{"session_$_"} }
+              grep { exists $self->{"session_$_"} }
+              keys %$wrapper_p
+            );
 
     return $self;
 }
 
-sub _check_session_params
+sub wrapper
 {
-    my $self = shift;
-
-    $self->{session_class_piece} = $self->{session_class};
-    $self->{session_class_piece} =~ s/^Apache::Session:://;
-
-    my $sets = $ApacheSessionParams{ $self->{session_class_piece} }
-	or param_error "Invalid session class: $self->{session_class}";
-
-    my $complete = $self->_check_sets($sets);
-
-    param_error "Not all of the required parameters for your chosen session class ($self->{session_class}) were provided."
-	unless $complete;
-
-    if ( $self->{session_class_piece} eq 'Flex' )
-    {
-	foreach my $key ( keys %ApacheSessionFlexParams )
-	{
-	    my $subclass = $self->{"session_$key"};
-	    my $sets = $ApacheSessionFlexParams{$key}{$subclass}
-		or param_error "Invalid class for $key: $self->{$key}";
-
-	    my $complete = $self->_check_sets($sets);
-
-	    param_error "Not all of the required parameters for your chosen $key class ($subclass) were provided."
-		unless $complete;
-	}
-    }
-}
-
-sub _check_sets
-{
-    my $self = shift;
-    my $sets = shift;
-
-    foreach my $set (@$sets)
-    {
-	return 1
-	    if ( grep { exists $self->{"session_$_"} } @$set ) == @$set;
-    }
-
-    return 0;
-}
-
-sub _set_session_params
-{
-    my $self = shift;
-
-    my %params;
-
-    $self->_sets_to_params
-	( $ApacheSessionParams{ $self->{session_class_piece} },
-	  \%params );
-
-    $self->_sets_to_params
-	( $OptionalApacheSessionParams{ $self->{session_class_piece} },
-	  \%params );
-
-
-    if ( $self->{session_class_piece} eq 'Flex' )
-    {
-	foreach my $key ( keys %ApacheSessionFlexParams )
-	{
-	    my $subclass = $self->{"session_$key"};
-	    $params{ $StudlyForm{$key} } = $subclass;
-
-	    $self->_sets_to_params
-		( $ApacheSessionFlexParams{$key}{$subclass},
-		  \%params );
-
-	    $self->_sets_to_params
-		( $OptionalApacheSessionFlexParams{$key}{$subclass},
-		  \%params );
-	}
-    }
-
-    $self->{session_params} = \%params;
-
-    if ( $self->{session_use_cookie} )
-    {
-        if ( $self->can('apache_req') )
-        {
-            eval { require Apache::Cookie; Apache::Cookie->can('bake'); };
-            unless ($@)
-            {
-                $self->{cookie_class} = 'Apache::Cookie';
-                $self->{new_cookie_args} = [ $self->apache_req ];
-            }
-        }
-
-        unless ( $self->{cookie_class} )
-        {
-            require CGI::Cookie;
-            $self->{cookie_class} = 'CGI::Cookie';
-            $self->{new_cookie_args} = [];
-        }
-    }
-}
-
-sub _sets_to_params
-{
-    my $self = shift;
-    my $sets = shift;
-    my $params = shift;
-
-    foreach my $set (@$sets)
-    {
-	foreach my $key (@$set)
-	{
-	    if ( exists $self->{"session_$key"} )
-	    {
-		$params->{ $StudlyForm{$key} } =
-		    $self->{"session_$key"};
-	    }
-	}
-    }
-}
-
-sub _make_session
-{
-    my $self = shift;
-    my %p = validate( @_,
-		      { session_id =>
-			{ type => SCALAR,
-                          optional => 1,
-			},
-		      } );
-
-    return if
-        defined $p{session_id} && $self->_try_session_id( $p{session_id} );
-
-    if ( defined $self->{session_args_param} )
-    {
-        my $id = $self->_get_session_id_from_args;
-
-        return if defined $id && $self->_try_session_id($id);
-    }
-
-    if ( $self->{session_use_cookie} )
-    {
-        my $id = $self->_get_session_id_from_cookie;
-
-        if ( defined $id && $self->_try_session_id($id) )
-        {
-            $self->{session_cookie_is_baked} = 1
-                unless $self->{session_cookie_resend};
-
-            return;
-        }
-    }
-
-    # make a new session id
-    $self->_try_session_id(undef);
-}
-
-sub _get_session_id_from_args
-{
-    my $self = shift;
-
-    my $args = $self->request_args;
-
-    return $args->{ $self->{session_args_param} }
-        if exists $args->{ $self->{session_args_param} };
-
-    return undef;
-}
-
-sub _try_session_id
-{
-    my $self = shift;
-    my $session_id = shift;
-
-    return 1 if ( $self->{session} &&
-                  defined $session_id &&
-                  $self->{session_id} eq $session_id );
-
-    my %s;
-    {
-	local $SIG{__DIE__};
-	eval
-	{
-	    tie %s, "Apache::Session::$self->{session_class_piece}",
-                $session_id, $self->{session_params};
-	};
-
-        if ($@)
-        {
-            $self->_handle_tie_error( $@, $session_id );
-            return;
-        }
-    }
-
-    untie %{ $self->{session} } if $self->{session};
-
-    $self->{session} = \%s;
-    $self->{session_id} = $s{_session_id};
-
-    $self->{session_cookie_is_baked} = 0;
-
-    return 1;
-}
-
-sub _get_session_id_from_cookie
-{
-    my $self = shift;
-
-    my %c = $self->{cookie_class}->fetch;
-
-    return $c{ $self->{session_cookie_name} }->value
-        if exists $c{ $self->{session_cookie_name} };
-
-    return undef;
-}
-
-sub _handle_tie_error
-{
-    my $self = shift;
-    my $err = shift;
-    my $session_id = shift;
-
-    if ( $err =~ /Object does not exist/ )
-    {
-        return if $self->{session_allow_invalid_id};
-
-        HTML::Mason::Exception::NonExistentSessionID->throw
-            ( error => "Invalid session id: $session_id",
-                  session_id => $session_id );
-    }
-    else
-    {
-        die $@;
-    }
-}
-
-sub _bake_cookie
-{
-    my $self = shift;
-
-    my $expires = shift || $self->{session_cookie_expires};
-
-    my $domain = $self->{session_cookie_domain};
-
-    my $cookie =
-        $self->{cookie_class}->new
-            ( @{ $self->{new_cookie_args} },
-              -name    => $self->{session_cookie_name},
-              -value   => $self->{session_id},
-              -expires => $expires,
-              ( defined $domain ?
-                ( -domain  => $domain ) :
-                ()
-              ),
-              -path    => $self->{session_cookie_path},
-              -secure  => $self->{session_cookie_secure},
-            );
-
-    if ( $cookie->can('bake') )
-    {
-        # Apache::Cookie
-        $cookie->bake;
-    }
-    else
-    {
-        if ( $self->can('apache_req') )
-        {
-            # works when we're a subclass of
-            # HTML::Mason::Request::ApacheHandler
-            $self->apache_req->err_header_out( 'Set-Cookie' => $cookie );
-        }
-        elsif ( $self->can('cgi_request') )
-        {
-            # works when we're a subclass of
-            # HTML::Mason::Request::CGIHandler
-            $self->cgi_request->header_out( 'Set-Cookie' => $cookie );
-        }
-        else
-        {
-            # no way to set headers!
-            die "Cannot set cookie headers when using CGI::Cookie without any object to set them on.";
-        }
-    }
-
-    # always set this even if we skipped actually setting the cookie
-    # to avoid resending it.  this keeps us from entering this method
-    # over and over
-    $self->{session_cookie_is_baked} = 1
-        unless $self->{session_cookie_resend};
+    $_[0]->is_subrequest
+    ? $_[0]->parent_request->wrapper
+    : $_[0]->{apache_session_wrapper}
 }
 
 sub exec
@@ -618,61 +130,20 @@ sub exec
 	$r[0] = $self->SUPER::exec(@_);
     }
 
-    $self->_cleanup_session;
+    $self->wrapper->cleanup_session;
 
     return wantarray ? @r : $r[0];
 }
 
-sub session
+BEGIN
 {
-    my $self = shift;
-
-    return $self->parent_request->session(@_) if $self->is_subrequest;
-
-    if ( ! $self->{session} || @_ )
+    foreach my $meth ( qw( session delete_session ) )
     {
-        $self->_make_session(@_);
-
-        $self->_bake_cookie
-            if $self->{session_use_cookie} && ! $self->{session_cookie_is_baked};
+        no strict 'refs';
+        *{$meth} = sub { shift->wrapper->$meth(@_) };
     }
-
-    return $self->{session};
 }
 
-sub delete_session
-{
-    my $self = shift;
-
-    return unless $self->{session};
-
-    my $session = delete $self->{session};
-
-    (tied %$session)->delete;
-
-    delete $self->{session_id};
-
-    $self->_bake_cookie('-1d') if $self->{session_use_cookie};
-}
-
-sub _cleanup_session
-{
-    my $self = shift;
-
-    if ( $self->{session_always_write} )
-    {
-	if ( $self->{session}->{___force_a_write___} )
-	{
-	    $self->{session}{___force_a_write___} = 0;
-	}
-	else
-	{
-	    $self->{session}{___force_a_write___} = 1;
-	}
-    }
-
-    untie %{ $self->{session} };
-}
 
 1;
 
@@ -749,241 +220,43 @@ cookie in the browser.
 =head1 CONFIGURATION
 
 This module accepts quite a number of parameters, most of which are
-simply passed through to C<Apache::Session>.  For this reason, you are
-advised to familiarize yourself with the C<Apache::Session>
-documentation before attempting to configure this module.
+simply passed through to C<Apache::Session::Wrapper>.  For this
+reason, you are advised to familiarize yourself with the
+C<Apache::Session::Wrapper> documentation before attempting to
+configure this module.
 
-=head2 Generic Parameters
+If you are creating your own Interp/ApacheHandler/CGIHandler object in
+a script or module, you should pass this object the parameters
+intended for C<Apache::Session::Wrapper>, prefixed with "session_".
+So to set the "class" parameter for C<Apache::Session::Wrapper>, you
+pass in a "session_class" parameter.
 
-=over 4
+If you are configuring Mason via your F<httpd.conf> file, you should
+pass the "StudlyCaps" version of the name, prefixed by "MasonSession".
+So the "class" parameter would be "MasonSessionClass".
 
-=item * session_class / MasonSessionClass  =>  class name
-
-The name of the C<Apache::Session> subclass you would like to use.
-
-This module will load this class for you if necessary.
-
-This parameter is required.
-
-=item * session_always_write / MasonSessionAlwaysWrite  =>  boolean
-
-If this is true, then this module will ensure that C<Apache::Session>
-writes the session.  If it is false, the default C<Apache::Session>
-behavior is used instead.
-
-This defaults to true.
-
-=item * session_allow_invalid_id / MasonSessionAllowInvalidId  =>  boolean
-
-If this is true, an attempt to create a session with a session id that
-does not exist in the session storage will be ignored, and a new
-session will be created instead.  If it is false, a
-C<HTML::Mason::Exception::NonExistentSessionID> exception will be
-thrown instead.
-
-This defaults to true.
-
-=back
-
-=head2 Cookie-Related Parameters
+A few examples:
 
 =over 4
 
-=item * session_use_cookie / MasonSessionUseCookie  =>  boolean
+=item * class becomes session_class / MasonSessionClass
 
-If true, then this module will use C<Apache::Cookie> to set and read
-cookies that contain the session id.
-
-The cookie will be set again every time the client accesses a Mason
-component unless the C<session_cookie_resend> parameter is false.
-
-=item * session_cookie_name / MasonSessionCookieName  =>  name
-
-This is the name of the cookie that this module will set.  This
-defaults to "MasonX-Request-WithApacheSession-cookie".
-Corresponds to the C<Apache::Cookie> "-name" constructor parameter.
-
-=item * session_cookie_expires / MasonSessionCookieExpires  =>  expiration
-
-How long before the cookie expires.  This defaults to 1 day, "+1d".
-Corresponds to the "-expires" parameter.
-
-=item * session_cookie_domain / MasonSessionCookieDomain  =>  domain
-
-This corresponds to the "-domain" parameter.  If not given this will
-not be set as part of the cookie.
-
-If it is undefined, then no "-domain" parameter will be given.
-
-=item * session_cookie_path / MasonSessionCookiePath  =>  path
-
-Corresponds to the "-path" parameter.  It defaults to "/".
-
-=item * session_cookie_secure / MasonSessionCookieSecure  =>  boolean
-
-Corresponds to the "-secure" parameter.  It defaults to false.
-
-=item * session_cookie_resend / MasonSessionCookieResend  =>  boolean
-
-By default, this parameter is true, and the cookie will be sent for
-I<every request>.  If it is false, then the cookie will only be sent
-when the session is I<created>.  This is important as resending the
-cookie has the effect of updating the expiration time.
+=item * always_write becomes session_always_write / MasonSessionAlwaysWrite
 
 =back
 
-=head2 URL-Related Parameters
+When running under ApacheHandler or CGIHandler, this module takes care
+of passing the "header_object" and "param_object" parameters to
+C<Apache::Session::Wrapper>.  These will be the C<Apache::Request> or
+C<CGI.pm> objects, as applicable.
 
-=over 4
+The "cookie_name" parameter defaults to
+"MasonX-Request-WithApacheSession-cookie" when you use this module,
+instead of "Apache-Session-Wrapper-cookie".
 
-=item * session_args_param / MasonSessionArgsParam  =>  name
-
-If set, then this module will first look for the session id in the
-query string or POST parameter with the specified name.
-
-If you are also using cookies, then the module checks in the request
-arguments I<first>, and then it checks for a cookie.
-
-The session id is available from C<< $m->session->{_session_id} >>.
-
-=back
-
-=head2 Apache::Session-related Parameters
-
-These parameters are simply passed through to C<Apache::Session>.
-
-=over 4
-
-=item * session_data_source / MasonSessionDataSource  =>  DSN
-
-Corresponds to the C<DataSource> parameter given to the DBI-related
-session modules.
-
-=item * session_user_name / MasonSessionUserName  =>  user name
-
-Corresponds to the C<UserName> parameter given to the DBI-related
-session modules.
-
-=item * session_password / MasonSessionPassword  =>  password
-
-Corresponds to the C<Password> parameter given to the DBI-related
-session modules.
-
-=item * session_handle =>  DBI handle
-
-Corresponds to the C<Handle> parameter given to the DBI-related
-session modules.  This cannot be set via the F<httpd.conf> file,
-because it needs to be an I<actual Perl variable>, not the I<name> of
-that variable.
-
-=item * session_lock_data_source / MasonSessionLockDataSource  =>  DSN
-
-Corresponds to the C<LockDataSource> parameter given to
-C<Apache::Session::MySQL>.
-
-=item * session_lock_user_name / MasonSessionLockUserName  =>  user name
-
-Corresponds to the C<LockUserName> parameter given to
-C<Apache::Session::MySQL>.
-
-=item * session_lock_password / MasonSessionLockPassword  =>  password
-
-Corresponds to the C<LockPassword> parameter given to
-C<Apache::Session::MySQL>.
-
-=item * session_lock_handle  =>  DBI handle
-
-Corresponds to the C<LockHandle> parameter given to the DBI-related
-session modules.  As with the C<session_handle> parameter, this cannot
-be set via the F<httpd.conf> file.
-
-=item * session_commit / MasonSessionCommit =>  boolean
-
-Corresponds to the C<Commit> parameter given to the DBI-related
-session modules.
-
-=item * session_transaction / MasonSessionTransaction  =>  boolean
-
-Corresponds to the C<Transaction> parameter.
-
-=item * session_directory / MasonSessionDirectory  =>  directory
-
-Corresponds to the C<Directory> parameter given to
-C<Apache::Session::File>.
-
-=item * session_lock_directory / MasonSessionLockDirectory  =>  directory
-
-Corresponds to the C<LockDirectory> parameter given to
-C<Apache::Session::File>.
-
-=item * session_file_name / MasonSessionFileName  =>  file name
-
-Corresponds to the C<FileName> parameter given to
-C<Apache::Session::DB_File>.
-
-=item * session_store / MasonSessionStore  =>  class
-
-Corresponds to the C<Store> parameter given to
-C<Apache::Session::Flex>.
-
-=item * session_lock / MasonSessionLock  =>  class
-
-Corresponds to the C<Lock> parameter given to
-C<Apache::Session::Flex>.
-
-=item * session_generate / MasonSessionGenerate  =>  class
-
-Corresponds to the C<Generate> parameter given to
-C<Apache::Session::Flex>.
-
-=item * session_serialize / MasonSessionSerialize  =>  class
-
-Corresponds to the C<Serialize> parameter given to
-C<Apache::Session::Flex>.
-
-=item * session_textsize / MasonSessionTextsize  =>  size
-
-Corresponds to the C<textsize> parameter given to
-C<Apache::Session::Sybase>.
-
-=item * session_long_read_len / MasonSessionLongReadLen  =>  size
-
-Corresponds to the C<LongReadLen> parameter given to
-C<Apache::Session::MySQL>.
-
-=item * session_n_sems / MasonSessionNSems  =>  number
-
-Corresponds to the C<NSems> parameter given to
-C<Apache::Session::Lock::Semaphore>.
-
-=item * session_semaphore_key / MasonSessionSemaphoreKey  =>  key
-
-Corresponds to the C<SemaphoreKey> parameter given to
-C<Apache::Session::Lock::Semaphore>.
-
-=item * session_mod_usertrack_cookie_name / MasonSessionModUsertrackCookieName  =>  name
-
-Corresponds to the C<ModUsertrackCookieName> parameter given to
-C<Apache::Session::Generate::ModUsertrack>.
-
-=item * session_save_path / MasonSessionSavePath  =>  path
-
-Corresponds to the C<SavePath> parameter given to
-C<Apache::Session::PHP>.
-
-=back
-
-=head1 HOW COOKIES ARE HANDLED
-
-When run under the ApacheHandler module, this module attempts to first
-use C<Apache::Cookie> for cookie-handling.  Otherwise it uses
-C<CGI::Cookie> as a fallback.
-
-If it ends up using C<CGI::Cookie> then it can only set cookies if it
-is running under either the ApacheHandler or the CGIHandler module.
-Otherwise, the C<MasonX::Request::WithApacheSession> request object
-has no way to get to an object which can take the headers.  In other
-words, if there's no C<$r>, there's nothing with which to set headers.
+Finally, for backwards compatiblity, this module accepts a
+"session_args_param" parameter, which corresponds to the "param_name"
+parameter for C<Apache::Session::Wrapper>.
 
 =head1 SUPPORT
 

@@ -19,9 +19,13 @@ sub make_tests
              );
 
     my %params =
-	( request_class  => 'MasonX::Request::WithMultiSession',
-	  session_class  => 'File',
-	);
+        ( request_class     => 'MasonX::Request::WithMultiSession',
+          session_class     => 'Flex',
+          session_store     => 'File',
+          session_lock      => 'Null',
+          session_generate  => 'MD5',
+          session_serialize => 'Storable',
+        );
 
     foreach ( [ session_directory => 'sessions' ],
 	    )

@@ -1,3 +1,17 @@
+0.30  March 19, 2004
+
+- MasonX::Request::WithApacheSession is now a very thin wrapper around
+Apache::Session::Wrapper (it's a wrapper wrapper!).  This change
+should be transparent to users.
+
+- Because of the above, you can now do this:
+
+ PerlSetVar MasonSessionCookieExpires session
+
+and get a cookie which expires when the browser is closed.  Requested
+by Herald (RT #5615).
+
+
 0.25  February 11, 2004
 
 - Ken broke Module::Build's backwards compatibility with older

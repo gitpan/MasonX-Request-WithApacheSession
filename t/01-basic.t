@@ -19,9 +19,13 @@ sub make_tests
              );
 
     my %params =
-	( request_class  => 'MasonX::Request::WithApacheSession',
-	  session_class  => 'File',
-	);
+        ( request_class     => 'MasonX::Request::WithApacheSession',
+          session_class     => 'Flex',
+          session_store     => 'File',
+          session_lock      => 'Null',
+          session_generate  => 'MD5',
+          session_serialize => 'Storable',
+        );
 
     foreach ( [ session_directory => 'sessions' ],
 	    )
@@ -74,7 +78,7 @@ my $tied = tied(%$s);
 </%init>
 EOF
 	  expect => <<'EOF',
-$m->session ref: Apache::Session::File
+$m->session ref: Apache::Session::Flex
 EOF
 	);
 

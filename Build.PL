@@ -5,25 +5,13 @@ use File::Basename;
 use File::Spec;
 use Module::Build;
 
-my %prereq = ( 'HTML::Mason' => 1.16,
-	       'Apache::Session' => 1.54,
-	     );
-
-eval { require mod_perl };
-if ( $@ || $^O =~ /mac|darwin/ )
-{
-    $prereq{'CGI::Cookie'} = 0;
-}
-else
-{
-    $prereq{'Apache::Cookie'} = 0;
-}
-
 
 my $build =
     Module::Build->new( module_name => 'MasonX::Request::WithApacheSession',
                         license     => 'perl',
-                        requires    => \%prereq,
+                        requires    => { 'HTML::Mason' => '1.16',
+                                         'Apache::Session::Wrapper' => '0.13',
+                                       },
                         sign        => 1,
                         create_makefile_pl => 'passthrough',
                       );
@@ -69,7 +57,7 @@ if ( -d '.svn' )
 
         my $base_config = <<"EOF";
 
-  PerlSetVar  MasonSessionClass  Apache::Session::File
+  PerlSetVar  MasonSessionClass          Apache::Session::File
   PerlSetVar  MasonSessionDirectory      $session_dir
   PerlSetVar  MasonSessionLockDirectory  $session_dir
 
@@ -99,6 +87,14 @@ $base_config
 <Location /comps/no_cookie/>
   PerlSetVar  MasonRequestClass  MasonX::Request::WithApacheSession
   PerlSetVar  MasonSessionUseCookie  0
+
+$base_config
+</Location>
+
+<Location /comps/session_cookie/>
+  PerlSetVar  MasonRequestClass  MasonX::Request::WithApacheSession
+  PerlSetVar  MasonSessionUseCookie  1
+  PerlSetVar  MasonSessionCookieExpires  session
 
 $base_config
 </Location>
