@@ -1,13 +1,19 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         MasonX-Request-WithApacheSession
-version:      0.23
-version_from: lib/MasonX/Request/WithApacheSession.pm
-installdirs:  site
-requires:
-    Apache::Cookie:                0
-    Apache::Session:               1.54
-    HTML::Mason:                   1.16
-
+--- #YAML:1.0
+name: MasonX-Request-WithApacheSession
+version: 0.24
+license: perl
 distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.15
+requires:
+  Apache::Cookie: 0
+  Apache::Session: 1.54
+  HTML::Mason: 1.16
+recommends: {}
+build_requires: {}
+conflicts: {}
+provides:
+  MasonX::Request::WithApacheSession:
+    file: lib/MasonX/Request/WithApacheSession.pm
+    version: 0.24
+  MasonX::Request::WithMultiSession:
+    file: lib/MasonX/Request/WithMultiSession.pm
+generated_by: Module::Build version 0.21

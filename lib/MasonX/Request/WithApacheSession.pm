@@ -5,7 +5,7 @@ use strict;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.23';
+$VERSION = '0.24';
 
 use Apache::Session;
 
@@ -691,6 +691,16 @@ In your F<httpd.conf> file:
   PerlSetVar  MasonSessionClass         Apache::Session::MySQL
   PerlSetVar  MasonSessionDataSource    dbi:mysql:somedb
 
+Or when creating an ApacheHandler object:
+
+  my $ah =
+      HTML::Mason::ApacheHandler->new
+          ( request_class => 'MasonX::Request::WithApacheSession',
+            session_cookie_domain => '.example.com',
+            session_class         => 'Apache::Session::MySQL',
+            session_data_source   => 'dbi:mysql:somedb',
+          );
+
 In a component:
 
   $m->session->{foo} = 1;
@@ -701,7 +711,7 @@ In a component:
 This module integrates C<Apache::Session> into Mason by adding methods
 to the Mason Request object available in all Mason components.
 
-Any subrequests created by a request share the same session hash.
+Any subrequests created by a request share the same session.
 
 =head1 USAGE
 
@@ -731,6 +741,8 @@ This method returns a hash tied to the C<Apache::Session> class.
 This method deletes the existing session from persistent storage.  If
 you are using the built-in cookie mechanism, it also deletes the
 cookie in the browser.
+
+=back
 
 =head1 CONFIGURATION
 
@@ -969,14 +981,15 @@ Otherwise, the C<MasonX::Request::WithApacheSession> request object
 has no way to get to an object which can take the headers.  In other
 words, if there's no C<$r>, there's nothing with which to set headers.
 
-=head1 BUGS
+=head1 SUPPORT
 
 As can be seen by the number of parameters above, C<Apache::Session>
 has B<way> too many possibilities for me to test all of them.  This
 means there are almost certainly bugs.
 
-Bug reports should be sent to the mason-users list.  See
-http://www.masonhq.com/resources/mailing_lists.html for more details.
+Bug reports and requests for help should be sent to the mason-users
+list.  See http://www.masonhq.com/resources/mailing_lists.html for
+more details.
 
 =head1 AUTHOR
 

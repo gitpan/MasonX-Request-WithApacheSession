@@ -24,7 +24,6 @@ sub make_tests
 	);
 
     foreach ( [ session_directory => 'sessions' ],
-	      [ session_lock_directory => 'session_locks' ]
 	    )
     {
 	my $dir = File::Spec->catfile( $group->data_dir, $_->[1] );

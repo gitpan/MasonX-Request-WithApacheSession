@@ -1,0 +1,34 @@
+This file contains message digests of all files listed in MANIFEST,
+signed via the Module::Signature module, version 0.35.
+
+To verify the content in this distribution, first make sure you have
+Module::Signature installed, then type:
+
+    % cpansign -v
+
+It would check each file's integrity, as well as the signature's
+validity.  If "==> Signature verified OK! <==" is not displayed,
+the distribution may already have been compromised, and you should
+not run its Makefile.PL or Build.PL.
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+SHA1 a190a3727c97e903a228b1e37a8c56e256f1a3f0 Build.PL
+SHA1 f10fe4c7c8943c4100fef414c5452e33641a2011 Changes
+SHA1 dee54fa75d7c150609a3e62409cacc291737fd39 MANIFEST
+SHA1 ee209e4da8dd36450b61c8119bafc342d4ed2be9 META.yml
+SHA1 1849b2e69cd3bf568e221f73cf6e91ebae6489c0 Makefile.PL
+SHA1 98a5634e712ee539f6d77740f7114ad526768ca6 README
+SHA1 f03fc6cc38a4a12514f76fd641d53691f702d710 lib/MasonX/Request/WithApacheSession.pm
+SHA1 0c2d3674d81fafa9db81a2b39cbe1aadbc645396 lib/MasonX/Request/WithMultiSession.pm
+SHA1 89a0411e5b8d2b69a58442226be553438cb13502 t/01-basic.t
+SHA1 83f9e269fe7fbe460c30452b8bda0831f2ff9d5f t/03-multi.t
+SHA1 77232b92127c5f3069f8b6d349aa5ef49ca1b9d4 t/99-pod.t
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.2.3 (GNU/Linux)
+
+iD8DBQE/qWVA+4tbS/niBUoRAlCuAJ9duR79VV6wNbZbRGB8V8I6/ZKAXwCgtawH
+NCgWacMUvpCu3obsXx0U9iM=
+=TtvX
+-----END PGP SIGNATURE-----

@@ -1,3 +1,14 @@
+0.24  November 5, 2003
+
+- This distro now includes the MasonX::Request::WithMultiSession
+module.  This module tries to help solve the problem of allowing a
+user to open multiple browser windows, each with their own individual
+session-based state.
+
+- Switched to Module::Build.
+
+- Distribution is signed with Module::Signature.
+
 0.23  August 15, 2003
 
 - Changed the 01-basic.t tests to not use the
