@@ -1,3 +1,9 @@
+0.21  March 19, 2003
+
+- Fixed the docs, which erroneously indicated that the session_handle
+and session_lock_handle parameter could be set via an Apache config
+file.
+
 0.20  February 21, 2003
 
 - Added a session_args_param constructor parameter, which tells this
@@ -10,11 +16,13 @@ the session() method is first called.
 - Rewrote the internals a bit to clean things up.  All tests pass but
 as always, use caution when deploying a new release.
 
+
 0.12  January 4, 2003
 
 - Setting the session_cookie_resend parameter to false caused the
 module to never send a cookie at all.  Reported and fixed by Michele
 Gherlone.
+
 
 0.11  December 17, 2002
 
@@ -23,6 +31,7 @@ HTML::Mason::Exception subclass.  Previously, loading this module
 before loading HTML::Mason::Exceptions caused this module to die.
 
 - Fixed a pod nit.
+
 
 0.10  not released because I'm dumb
 
@@ -35,6 +44,7 @@ with Apache::Cookie.
 module to not resend cookies every time the session is accessed.  The
 default remains the same, which is to resend the cookie every time the
 session is accessed.  Based on a patch from John Armstrong.
+
 
 0.09  October 21, 2002
 

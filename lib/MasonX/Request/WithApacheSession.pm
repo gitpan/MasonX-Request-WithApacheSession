@@ -5,7 +5,7 @@ use strict;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.20';
+$VERSION = '0.21';
 
 use Apache::Session;
 
@@ -111,15 +111,18 @@ my %params =
 	descr => 'The password to be used when connecting to a database' },
 
       session_handle =>
-      { optional => 1,
+      { type => OBJECT,
+        optional => 1,
 	descr => 'An existing database handle to use' },
 
       session_lock_handle =>
-      { optional => 1,
+      { type => OBJECT,
+        optional => 1,
 	descr => 'An existing database handle to use' },
 
       session_commit =>
-      { default => 1,
+      { type => BOOLEAN,
+        default => 1,
 	descr => 'Whether or not to auto-commit changes to the database' },
 
       session_transaction =>
@@ -850,10 +853,12 @@ session modules.
 Corresponds to the C<Password> parameter given to the DBI-related
 session modules.
 
-=item * session_handle / MasonSessionHandle =>  DBI handle
+=item * session_handle =>  DBI handle
 
 Corresponds to the C<Handle> parameter given to the DBI-related
-session modules.
+session modules.  This cannot be set via the F<httpd.conf> file,
+because it needs to be an I<actual Perl variable>, not the I<name> of
+that variable.
 
 =item * session_lock_data_source / MasonSessionLockDataSource  =>  DSN
 
@@ -870,10 +875,11 @@ C<Apache::Session::MySQL>.
 Corresponds to the C<LockPassword> parameter given to
 C<Apache::Session::MySQL>.
 
-=item * session_lock_handle / MasonSessionLockHandle  =>  DBI handle
+=item * session_lock_handle  =>  DBI handle
 
 Corresponds to the C<LockHandle> parameter given to the DBI-related
-session modules.
+session modules.  As with the C<session_handle> parameter, this cannot
+be set via the F<httpd.conf> file.
 
 =item * session_commit / MasonSessionCommit =>  boolean
 
