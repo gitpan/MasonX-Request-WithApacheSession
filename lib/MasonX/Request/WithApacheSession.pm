@@ -5,7 +5,7 @@ use strict;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.21';
+$VERSION = '0.22';
 
 use Apache::Session;
 
@@ -219,8 +219,8 @@ $ApacheSessionParams{Oracle} =
       $ApacheSessionParams{Postgres};
 
 my %OptionalApacheSessionParams =
-    ( Sybase => [ qw( textsize ) ],
-      Oracle => [ qw( long_read_len ) ],
+    ( Sybase => [ [ qw( textsize ) ] ],
+      Oracle => [ [ qw( long_read_len ) ] ],
     );
 
 my %ApacheSessionFlexParams =
