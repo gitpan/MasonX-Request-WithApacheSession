@@ -1,3 +1,10 @@
+0.25  February 11, 2004
+
+- Ken broke Module::Build's backwards compatibility with older
+passthrough Makefile.PL scripts and went on vacation.  This version
+has no code changes besides a newly generated Makefile.PL.
+
+
 0.24  November 5, 2003
 
 - This distro now includes the MasonX::Request::WithMultiSession
@@ -9,22 +16,26 @@ session-based state.
 
 - Distribution is signed with Module::Signature.
 
+
 0.23  August 15, 2003
 
 - Changed the 01-basic.t tests to not use the
 Apache::Session::Lock::File module, since file locking may not work on
 all platforms.
 
+
 0.22  August 12, 2003
 
 - Fixed handling of the session_long_read_len and session_textsize
 parameters.  Reported by Mario Truyens.
+
 
 0.21  March 19, 2003
 
 - Fixed the docs, which erroneously indicated that the session_handle
 and session_lock_handle parameter could be set via an Apache config
 file.
+
 
 0.20  February 21, 2003
 

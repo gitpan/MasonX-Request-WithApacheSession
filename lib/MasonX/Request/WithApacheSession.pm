@@ -5,7 +5,7 @@ use strict;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.24';
+$VERSION = '0.25';
 
 use Apache::Session;
 
@@ -294,10 +294,10 @@ sub new
 
     my $self = $class->SUPER::new(@_);
 
+    return if $self->is_subrequest;
+
     $self->_check_session_params;
     $self->_set_session_params;
-
-    return if $self->is_subrequest;
 
     eval "require Apache::Session::$self->{session_class_piece}";
     die $@ if $@;
@@ -559,7 +559,7 @@ sub _bake_cookie
               -name    => $self->{session_cookie_name},
               -value   => $self->{session_id},
               -expires => $expires,
-              ( defined $self->{session_cookie_domain} ?
+              ( defined $domain ?
                 ( -domain  => $domain ) :
                 ()
               ),
@@ -604,6 +604,9 @@ sub exec
 {
     my $self = shift;
 
+    return $self->SUPER::exec(@_)
+        if $self->is_subrequest;
+
     my @r;
 
     if (wantarray)
@@ -615,10 +618,7 @@ sub exec
 	$r[0] = $self->SUPER::exec(@_);
     }
 
-    unless ( $self->is_subrequest )
-    {
-	$self->_cleanup_session;
-    }
+    $self->_cleanup_session;
 
     return wantarray ? @r : $r[0];
 }
@@ -686,19 +686,21 @@ MasonX::Request::WithApacheSession - Add a session to the Mason Request object
 
 In your F<httpd.conf> file:
 
-  PerlSetVar  MasonRequestClass         MasonX::Request::WithApacheSession
-  PerlSetVar  MasonSessionCookieDomain  .example.com
-  PerlSetVar  MasonSessionClass         Apache::Session::MySQL
-  PerlSetVar  MasonSessionDataSource    dbi:mysql:somedb
+  PerlSetVar  MasonRequestClass            MasonX::Request::WithApacheSession
+  PerlSetVar  MasonSessionCookieDomain     .example.com
+  PerlSetVar  MasonSessionClass            Apache::Session::File
+  PerlSetVar  MasonSessionDirectory        /tmp/sessions/data
+  PerlSetVar  MasonSessionLockDirectory    /tmp/sessions/locks
 
 Or when creating an ApacheHandler object:
 
   my $ah =
       HTML::Mason::ApacheHandler->new
           ( request_class => 'MasonX::Request::WithApacheSession',
-            session_cookie_domain => '.example.com',
-            session_class         => 'Apache::Session::MySQL',
-            session_data_source   => 'dbi:mysql:somedb',
+            session_cookie_domain  => '.example.com',
+            session_class          => 'Apache::Session::File',
+            session_directory      => '/tmp/sessions/data',
+            session_lock_directory => '/tmp/sessions/locks',
           );
 
 In a component:
@@ -810,6 +812,8 @@ Corresponds to the "-expires" parameter.
 
 This corresponds to the "-domain" parameter.  If not given this will
 not be set as part of the cookie.
+
+If it is undefined, then no "-domain" parameter will be given.
 
 =item * session_cookie_path / MasonSessionCookiePath  =>  path
 
