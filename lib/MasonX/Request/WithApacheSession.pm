@@ -5,7 +5,7 @@ use strict;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.12';
+$VERSION = '0.20';
 
 use Apache::Session;
 
@@ -35,6 +35,11 @@ my %params =
       { type => BOOLEAN,
 	default => 1,
 	descr => 'Whether or not to allow a failure to find an existing session id' },
+
+      session_args_param =>
+      { type => SCALAR,
+	default => undef,
+	descr => 'Name of the parameter to use for session tracking' },
 
       session_use_cookie =>
       { type => BOOLEAN,
@@ -286,42 +291,23 @@ sub new
 
     my $self = $class->SUPER::new(@_);
 
-    $self->_check_params;
+    $self->_check_session_params;
+    $self->_set_session_params;
 
-    if ( $self->{session_use_cookie} && ! $self->is_subrequest )
-    {
-        if ( $self->can('apache_req') )
-        {
-            eval { require Apache::Cookie; Apache::Cookie->can('bake'); };
-            unless ($@)
-            {
-                $self->{cookie_class} = 'Apache::Cookie';
-                $self->{new_cookie_args} = [ $self->apache_req ];
-            }
-        }
-
-        unless ( $self->{cookie_class} )
-        {
-            require CGI::Cookie;
-            $self->{cookie_class} = 'CGI::Cookie';
-            $self->{new_cookie_args} = [];
-        }
-
-        my %c = $self->{cookie_class}->fetch;
-
-        $self->{session_id} =
-            ( exists $c{ $self->{session_cookie_name} } ?
-              $c{ $self->{session_cookie_name} }->value :
-              undef );
-    }
+    return if $self->is_subrequest;
 
     eval "require Apache::Session::$self->{session_class_piece}";
     die $@ if $@;
 
+    $self->_make_session;
+
+    $self->_bake_cookie
+        if $self->{session_use_cookie} && ! $self->{session_cookie_is_baked};
+
     return $self;
 }
 
-sub _check_params
+sub _check_session_params
 {
     my $self = shift;
 
@@ -366,166 +352,7 @@ sub _check_sets
     return 0;
 }
 
-sub exec
-{
-    my $self = shift;
-
-    my @r;
-
-    if (wantarray)
-    {
-	@r = $self->SUPER::exec(@_);
-    }
-    else
-    {
-	$r[0] = $self->SUPER::exec(@_);
-    }
-
-    unless ( $self->is_subrequest )
-    {
-	$self->_cleanup_session;
-    }
-
-    return wantarray ? @r : $r[0];
-}
-
-sub session
-{
-    my $self = shift;
-
-    return $self->parent_request->session(@_) if $self->is_subrequest;
-
-    return $self->{session} if $self->{session};
-
-    $self->{session} = $self->_make_session(@_);
-    $self->{session_id} = $self->{session}{_session_id};
-
-    $self->_bake_cookie if $self->{session_use_cookie} && ! $self->{session_cookie_is_baked};
-
-    return $self->{session};
-}
-
-sub delete_session
-{
-    my $self = shift;
-
-    return unless $self->{session};
-
-    my $session = delete $self->{session};
-
-    (tied %$session)->delete;
-
-    delete $self->{session_id};
-
-    $self->_bake_cookie('-1d') if $self->{session_use_cookie};
-}
-
-sub _make_session
-{
-    my $self = shift;
-    my %p = validate( @_,
-		      { session_id =>
-			{ type => SCALAR,
-			  default => $self->{session_id},
-			},
-		      } );
-
-    my $params = $self->_session_params;
-
-    my %s;
-
-    {
-	local $SIG{__DIE__};
-	eval
-	{
-	    tie %s, "Apache::Session::$self->{session_class_piece}", $p{session_id}, $params;
-            $self->{new_session_was_created} = defined $p{session_id} ? 0 : 1;
-	};
-    }
-
-    if ($@)
-    {
-        # so new id is used in cookie.
-        delete $self->{session_id};
-
-	if ( $@ =~ /Object does not exist/ )
-	{
-            HTML::Mason::Exception::NonExistentSessionID->throw
-                ( error => "Invalid session id: $p{session_id}",
-                  session_id => $p{session_id} )
-                    unless $self->{session_allow_invalid_id};
-        }
-        else
-        {
-            die $@;
-        }
-
-	tie %s, "Apache::Session::$self->{session_class_piece}", undef, $params;
-
-	$self->{new_session_was_created} = 1 ;
-    }
-
-    return \%s;
-}
-
-sub _bake_cookie
-{
-    my $self = shift;
-    my $expires = shift || $self->{session_cookie_expires};
-
-    my $domain =
-	$self->{session_cookie_domain};
-
-    if ( $self->{new_session_was_created} || $self->{session_cookie_resend} )
-    {
-        my $cookie =
-            $self->{cookie_class}->new
-                ( @{ $self->{new_cookie_args} },
-                  -name    => $self->{session_cookie_name},
-                  -value   => $self->{session_id},
-                  -expires => $expires,
-                  ( defined $self->{session_cookie_domain} ?
-                    ( -domain  => $domain ) :
-                    ()
-                  ),
-                  -path    => $self->{session_cookie_path},
-                  -secure  => $self->{session_cookie_secure},
-                );
-
-        if ( $cookie->can('bake') )
-        {
-            # Apache::Cookie
-            $cookie->bake;
-        }
-        else
-        {
-            if ( $self->can('apache_req') )
-            {
-                # works when we're a subclass of
-                # HTML::Mason::Request::ApacheHandler
-                $self->apache_req->err_header_out( 'Set-Cookie' => $cookie );
-            }
-            elsif ( $self->can('cgi_request') )
-            {
-                # works when we're a subclass of
-                # HTML::Mason::Request::CGIHandler
-                $self->cgi_request->header_out( 'Set-Cookie' => $cookie );
-            }
-            else
-            {
-                # no way to set headers!
-                die "Cannot set cookie headers when using CGI::Cookie without any object to set them on.";
-            }
-        }
-    }
-
-    # always set this even if we skipped actually setting the cookie
-    # to avoid resending it.  this keeps us from entering this method
-    # over and over
-    $self->{session_cookie_is_baked} = 1;
-}
-
-sub _session_params
+sub _set_session_params
 {
     my $self = shift;
 
@@ -557,7 +384,27 @@ sub _session_params
 	}
     }
 
-    return \%params;
+    $self->{session_params} = \%params;
+
+    if ( $self->{session_use_cookie} )
+    {
+        if ( $self->can('apache_req') )
+        {
+            eval { require Apache::Cookie; Apache::Cookie->can('bake'); };
+            unless ($@)
+            {
+                $self->{cookie_class} = 'Apache::Cookie';
+                $self->{new_cookie_args} = [ $self->apache_req ];
+            }
+        }
+
+        unless ( $self->{cookie_class} )
+        {
+            require CGI::Cookie;
+            $self->{cookie_class} = 'CGI::Cookie';
+            $self->{new_cookie_args} = [];
+        }
+    }
 }
 
 sub _sets_to_params
@@ -577,6 +424,232 @@ sub _sets_to_params
 	    }
 	}
     }
+}
+
+sub _make_session
+{
+    my $self = shift;
+    my %p = validate( @_,
+		      { session_id =>
+			{ type => SCALAR,
+                          optional => 1,
+			},
+		      } );
+
+    return if
+        defined $p{session_id} && $self->_try_session_id( $p{session_id} );
+
+    if ( defined $self->{session_args_param} )
+    {
+        my $id = $self->_get_session_id_from_args;
+
+        return if defined $id && $self->_try_session_id($id);
+    }
+
+    if ( $self->{session_use_cookie} )
+    {
+        my $id = $self->_get_session_id_from_cookie;
+
+        if ( defined $id && $self->_try_session_id($id) )
+        {
+            $self->{session_cookie_is_baked} = 1
+                unless $self->{session_cookie_resend};
+
+            return;
+        }
+    }
+
+    # make a new session id
+    $self->_try_session_id(undef);
+}
+
+sub _get_session_id_from_args
+{
+    my $self = shift;
+
+    my $args = $self->request_args;
+
+    return $args->{ $self->{session_args_param} }
+        if exists $args->{ $self->{session_args_param} };
+
+    return undef;
+}
+
+sub _try_session_id
+{
+    my $self = shift;
+    my $session_id = shift;
+
+    return 1 if ( $self->{session} &&
+                  defined $session_id &&
+                  $self->{session_id} eq $session_id );
+
+    my %s;
+    {
+	local $SIG{__DIE__};
+	eval
+	{
+	    tie %s, "Apache::Session::$self->{session_class_piece}",
+                $session_id, $self->{session_params};
+	};
+
+        if ($@)
+        {
+            $self->_handle_tie_error( $@, $session_id );
+            return;
+        }
+    }
+
+    untie %{ $self->{session} } if $self->{session};
+
+    $self->{session} = \%s;
+    $self->{session_id} = $s{_session_id};
+
+    $self->{session_cookie_is_baked} = 0;
+
+    return 1;
+}
+
+sub _get_session_id_from_cookie
+{
+    my $self = shift;
+
+    my %c = $self->{cookie_class}->fetch;
+
+    return $c{ $self->{session_cookie_name} }->value
+        if exists $c{ $self->{session_cookie_name} };
+
+    return undef;
+}
+
+sub _handle_tie_error
+{
+    my $self = shift;
+    my $err = shift;
+    my $session_id = shift;
+
+    if ( $err =~ /Object does not exist/ )
+    {
+        return if $self->{session_allow_invalid_id};
+
+        HTML::Mason::Exception::NonExistentSessionID->throw
+            ( error => "Invalid session id: $session_id",
+                  session_id => $session_id );
+    }
+    else
+    {
+        die $@;
+    }
+}
+
+sub _bake_cookie
+{
+    my $self = shift;
+
+    my $expires = shift || $self->{session_cookie_expires};
+
+    my $domain = $self->{session_cookie_domain};
+
+    my $cookie =
+        $self->{cookie_class}->new
+            ( @{ $self->{new_cookie_args} },
+              -name    => $self->{session_cookie_name},
+              -value   => $self->{session_id},
+              -expires => $expires,
+              ( defined $self->{session_cookie_domain} ?
+                ( -domain  => $domain ) :
+                ()
+              ),
+              -path    => $self->{session_cookie_path},
+              -secure  => $self->{session_cookie_secure},
+            );
+
+    if ( $cookie->can('bake') )
+    {
+        # Apache::Cookie
+        $cookie->bake;
+    }
+    else
+    {
+        if ( $self->can('apache_req') )
+        {
+            # works when we're a subclass of
+            # HTML::Mason::Request::ApacheHandler
+            $self->apache_req->err_header_out( 'Set-Cookie' => $cookie );
+        }
+        elsif ( $self->can('cgi_request') )
+        {
+            # works when we're a subclass of
+            # HTML::Mason::Request::CGIHandler
+            $self->cgi_request->header_out( 'Set-Cookie' => $cookie );
+        }
+        else
+        {
+            # no way to set headers!
+            die "Cannot set cookie headers when using CGI::Cookie without any object to set them on.";
+        }
+    }
+
+    # always set this even if we skipped actually setting the cookie
+    # to avoid resending it.  this keeps us from entering this method
+    # over and over
+    $self->{session_cookie_is_baked} = 1
+        unless $self->{session_cookie_resend};
+}
+
+sub exec
+{
+    my $self = shift;
+
+    my @r;
+
+    if (wantarray)
+    {
+	@r = $self->SUPER::exec(@_);
+    }
+    else
+    {
+	$r[0] = $self->SUPER::exec(@_);
+    }
+
+    unless ( $self->is_subrequest )
+    {
+	$self->_cleanup_session;
+    }
+
+    return wantarray ? @r : $r[0];
+}
+
+sub session
+{
+    my $self = shift;
+
+    return $self->parent_request->session(@_) if $self->is_subrequest;
+
+    if ( ! $self->{session} || @_ )
+    {
+        $self->_make_session(@_);
+
+        $self->_bake_cookie
+            if $self->{session_use_cookie} && ! $self->{session_cookie_is_baked};
+    }
+
+    return $self->{session};
+}
+
+sub delete_session
+{
+    my $self = shift;
+
+    return unless $self->{session};
+
+    my $session = delete $self->{session};
+
+    (tied %$session)->delete;
+
+    delete $self->{session_id};
+
+    $self->_bake_cookie('-1d') if $self->{session_use_cookie};
 }
 
 sub _cleanup_session
@@ -705,7 +778,7 @@ If true, then this module will use C<Apache::Cookie> to set and read
 cookies that contain the session id.
 
 The cookie will be set again every time the client accesses a Mason
-component.
+component unless the C<session_cookie_resend> parameter is false.
 
 =item * session_cookie_name / MasonSessionCookieName  =>  name
 
@@ -733,11 +806,26 @@ Corresponds to the "-secure" parameter.  It defaults to false.
 
 =item * session_cookie_resend / MasonSessionCookieResend  =>  boolean
 
-If this is true, then the cookie will be sent every time the session
-is I<accessed>.  Otherwise, the cookie will only be sent when the
-session is I<created>.  This is important as resending the cookie has
-the effect of updating the expiration time.  It defaults to true
-(resend cookies).
+By default, this parameter is true, and the cookie will be sent for
+I<every request>.  If it is false, then the cookie will only be sent
+when the session is I<created>.  This is important as resending the
+cookie has the effect of updating the expiration time.
+
+=back
+
+=head2 URL-Related Parameters
+
+=over 4
+
+=item * session_args_param / MasonSessionArgsParam  =>  name
+
+If set, then this module will first look for the session id in the
+query string or POST parameter with the specified name.
+
+If you are also using cookies, then the module checks in the request
+arguments I<first>, and then it checks for a cookie.
+
+The session id is available from C<< $m->session->{_session_id} >>.
 
 =back
 

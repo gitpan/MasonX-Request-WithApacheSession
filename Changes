@@ -1,3 +1,15 @@
+0.20  February 21, 2003
+
+- Added a session_args_param constructor parameter, which tells this
+module to look in the request args for a session id.  This can be used
+in combination with cookies or by itself.
+
+- Cookies are now sent when the request object is created, not when
+the session() method is first called.
+
+- Rewrote the internals a bit to clean things up.  All tests pass but
+as always, use caution when deploying a new release.
+
 0.12  January 4, 2003
 
 - Setting the session_cookie_resend parameter to false caused the
@@ -22,7 +34,7 @@ with Apache::Cookie.
 - Added session_cookie_resend parameter, which allows you to tell this
 module to not resend cookies every time the session is accessed.  The
 default remains the same, which is to resend the cookie every time the
-session is accessed.
+session is accessed.  Based on a patch from John Armstrong.
 
 0.09  October 21, 2002
 

@@ -51,7 +51,8 @@ if ( -d '.svn' )
                 or die "Can't make dir '$data_dir': $!";
         }
 
-        my $session_dir = File::Spec->tmpdir . '/sessions';
+        my $session_dir =
+            File::Spec->catdir( File::Spec->tmpdir, 'sessions' );
 
         unless ( -d $session_dir )
         {
@@ -91,6 +92,14 @@ $base_config
 <Location /comps/no_cookie/>
   PerlSetVar  MasonRequestClass  MasonX::Request::WithApacheSession
   PerlSetVar  MasonSessionUseCookie  0
+
+$base_config
+</Location>
+
+<Location /comps/cookie_and_args/>
+  PerlSetVar  MasonRequestClass  MasonX::Request::WithApacheSession
+  PerlSetVar  MasonSessionUseCookie  1
+  PerlSetVar  MasonSessionArgsParam  SID
 
 $base_config
 </Location>
