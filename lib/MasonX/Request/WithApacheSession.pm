@@ -5,7 +5,7 @@ use strict;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.11';
+$VERSION = '0.12';
 
 use Apache::Session;
 
@@ -434,13 +434,12 @@ sub _make_session
 
     my %s;
 
-    $self->{new_session_was_created} = exists $p{session_id} ? 0 : 1;
-
     {
 	local $SIG{__DIE__};
 	eval
 	{
 	    tie %s, "Apache::Session::$self->{session_class_piece}", $p{session_id}, $params;
+            $self->{new_session_was_created} = defined $p{session_id} ? 0 : 1;
 	};
     }
 

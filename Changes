@@ -1,4 +1,10 @@
-0.11
+0.12  January 4, 2003
+
+- Setting the session_cookie_resend parameter to false caused the
+module to never send a cookie at all.  Reported and fixed by Michele
+Gherlone.
+
+0.11  December 17, 2002
 
 - Make sure Mason modules are loaded before declaring
 HTML::Mason::Exception subclass.  Previously, loading this module
@@ -6,7 +12,7 @@ before loading HTML::Mason::Exceptions caused this module to die.
 
 - Fixed a pod nit.
 
-0.10
+0.10  not released because I'm dumb
 
 - This module would not set cookies properly when run with mod_perl
 2.0 or when run under CGIHandler.  Even though it loaded CGI::Cookie,
