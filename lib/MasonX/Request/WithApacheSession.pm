@@ -5,7 +5,7 @@ use strict;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.22';
+$VERSION = '0.23';
 
 use Apache::Session;
 
@@ -15,7 +15,7 @@ use HTML::Mason::Request;
 
 use Exception::Class ( 'HTML::Mason::Exception::NonExistentSessionID' =>
 		       { isa => 'HTML::Mason::Exception',
-			 description => 'An non-existent session id was used',
+			 description => 'A non-existent session id was used',
 			 fields => [ 'session_id' ] },
 		     );
 

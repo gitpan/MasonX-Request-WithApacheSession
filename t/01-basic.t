@@ -34,11 +34,15 @@ sub make_tests
     }
 
     # will be used below in various ways
-    use Apache::Session::File;
+    use Apache::Session::Flex;
     my %session;
-    tie %session, 'Apache::Session::File', undef,
-        { Directory => $params{session_directory},
-	  LockDirectory => $params{session_lock_directory} };
+    tie %session, 'Apache::Session::Flex', undef,
+        { Store     => 'File',
+          Lock      => 'Null',
+          Generate  => 'MD5',
+          Serialize => 'Storable',
+          Directory => $params{session_directory},
+        };
     $session{bar}{baz} = 1;
     my $id = $session{_session_id};
     untie %session;
