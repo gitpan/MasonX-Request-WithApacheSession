@@ -5,7 +5,7 @@ use strict;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.08';
+$VERSION = '0.09';
 
 use Apache::Session;
 
@@ -42,7 +42,7 @@ my %params =
 
       session_cookie_name =>
       { type => SCALAR,
-	default => 'HTML-Mason-Request-WithApacheSession-cookie',
+	default => 'MasonX-Request-WithApacheSession-cookie',
 	descr => 'Name of cookie used by this module' },
 
       session_cookie_expires =>
@@ -287,8 +287,11 @@ sub new
         if ( $self->can('apache_req') )
         {
             eval { require Apache::Cookie };
-            $self->{cookie_class} = 'Apache::Cookie';
-            $self->{new_cookie_args} = [ $self->apache_req ];
+            unless ($@)
+            {
+                $self->{cookie_class} = 'Apache::Cookie';
+                $self->{new_cookie_args} = [ $self->apache_req ];
+            }
         }
 
         unless ( $self->{cookie_class} )
@@ -386,8 +389,10 @@ sub session
 
     return $self->parent_request->session(@_) if $self->is_subrequest;
 
-    $self->{session} ||= $self->_make_session(@_);
-    $self->{session_id} ||= $self->{session}{_session_id};
+    return $self->{session} if $self->{session};
+
+    $self->{session} = $self->_make_session(@_);
+    $self->{session_id} = $self->{session}{_session_id};
 
     $self->_bake_cookie if $self->{session_use_cookie} && ! $self->{session_cookie_is_baked};
 
@@ -665,7 +670,7 @@ component.
 =item * session_cookie_name / MasonSessionCookieName  =>  name
 
 This is the name of the cookie that this module will set.  This
-defaults to "HTML-Mason-Request-WithApacheSession-cookie".
+defaults to "MasonX-Request-WithApacheSession-cookie".
 Corresponds to the C<Apache::Cookie> "-name" constructor parameter.
 
 =item * session_cookie_expires / MasonSessionCookieExpires  =>  expiration

@@ -1,4 +1,17 @@
-0.08
+0.09  October 21, 2002
+
+- ** Change the default cookie name to
+"MasonX-Request-WithApacheSession".  This means if you were using
+previous versions of the module with the default cookie name and you
+install this one, old cookies will not be recognized.  You can
+explicitly set the cookie name to the old value,
+"HTML-Mason-Request-WithApacheSession", if this is a problem.
+
+- The previous version would try to use Apache::Cookie for
+reading/setting cookies even if it couldn't load Apache::Cookie.
+
+
+0.08  October 19, 2002
 
 - ** Renamed to MasonX::Request::WithApacheSession.  MasonX is the new
 official namespace for classes distributed outside of the Mason core
