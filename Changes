@@ -1,3 +1,23 @@
+0.11
+
+- Make sure Mason modules are loaded before declaring
+HTML::Mason::Exception subclass.  Previously, loading this module
+before loading HTML::Mason::Exceptions caused this module to die.
+
+- Fixed a pod nit.
+
+0.10
+
+- This module would not set cookies properly when run with mod_perl
+2.0 or when run under CGIHandler.  Even though it loaded CGI::Cookie,
+it would attempt call ->bake on the cookie object, which only works
+with Apache::Cookie.
+
+- Added session_cookie_resend parameter, which allows you to tell this
+module to not resend cookies every time the session is accessed.  The
+default remains the same, which is to resend the cookie every time the
+session is accessed.
+
 0.09  October 21, 2002
 
 - ** Change the default cookie name to

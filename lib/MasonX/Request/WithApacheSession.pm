@@ -5,18 +5,19 @@ use strict;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.09';
+$VERSION = '0.11';
 
 use Apache::Session;
+
+use HTML::Mason 1.16;
+use HTML::Mason::Exceptions ( abbr => [ qw( param_error error ) ] );
+use HTML::Mason::Request;
 
 use Exception::Class ( 'HTML::Mason::Exception::NonExistentSessionID' =>
 		       { isa => 'HTML::Mason::Exception',
 			 description => 'An non-existent session id was used',
 			 fields => [ 'session_id' ] },
 		     );
-
-use HTML::Mason::Exceptions ( abbr => [ qw( param_error error ) ] );
-use HTML::Mason::Request;
 
 use Params::Validate qw(:all);
 Params::Validate::validation_options( on_fail => sub { param_error( join '', @_ ) } );
@@ -64,6 +65,11 @@ my %params =
       { type => BOOLEAN,
 	default => 0,
 	descr => 'Are cookies sent only for SSL connections?' },
+
+      session_cookie_resend =>
+      { type => BOOLEAN,
+	default => 1,
+	descr => 'Resend the cookie on each request?' },
 
       session_class =>
       { type => SCALAR,
@@ -286,7 +292,7 @@ sub new
     {
         if ( $self->can('apache_req') )
         {
-            eval { require Apache::Cookie };
+            eval { require Apache::Cookie; Apache::Cookie->can('bake'); };
             unless ($@)
             {
                 $self->{cookie_class} = 'Apache::Cookie';
@@ -428,6 +434,8 @@ sub _make_session
 
     my %s;
 
+    $self->{new_session_was_created} = exists $p{session_id} ? 0 : 1;
+
     {
 	local $SIG{__DIE__};
 	eval
@@ -443,17 +451,19 @@ sub _make_session
 
 	if ( $@ =~ /Object does not exist/ )
 	{
-	    HTML::Mason::Exception::NonExistentSessionID->throw
-		( error => "Invalid session id: $p{session_id}",
-		  session_id => $p{session_id} )
-		    unless $self->{session_allow_invalid_id};
-	}
-	else
-	{
-	    die $@;
-	}
+            HTML::Mason::Exception::NonExistentSessionID->throw
+                ( error => "Invalid session id: $p{session_id}",
+                  session_id => $p{session_id} )
+                    unless $self->{session_allow_invalid_id};
+        }
+        else
+        {
+            die $@;
+        }
 
 	tie %s, "Apache::Session::$self->{session_class_piece}", undef, $params;
+
+	$self->{new_session_was_created} = 1 ;
     }
 
     return \%s;
@@ -467,19 +477,52 @@ sub _bake_cookie
     my $domain =
 	$self->{session_cookie_domain};
 
-    $self->{cookie_class}->new
-	( @{ $self->{new_cookie_args} },
-	  -name    => $self->{session_cookie_name},
-	  -value   => $self->{session_id},
-	  -expires => $expires,
-	  ( defined $self->{session_cookie_domain} ?
-	    ( -domain  => $domain ) :
-	    ()
-	  ),
-	  -path    => $self->{session_cookie_path},
-	  -secure  => $self->{session_cookie_secure},
-	)->bake;
+    if ( $self->{new_session_was_created} || $self->{session_cookie_resend} )
+    {
+        my $cookie =
+            $self->{cookie_class}->new
+                ( @{ $self->{new_cookie_args} },
+                  -name    => $self->{session_cookie_name},
+                  -value   => $self->{session_id},
+                  -expires => $expires,
+                  ( defined $self->{session_cookie_domain} ?
+                    ( -domain  => $domain ) :
+                    ()
+                  ),
+                  -path    => $self->{session_cookie_path},
+                  -secure  => $self->{session_cookie_secure},
+                );
 
+        if ( $cookie->can('bake') )
+        {
+            # Apache::Cookie
+            $cookie->bake;
+        }
+        else
+        {
+            if ( $self->can('apache_req') )
+            {
+                # works when we're a subclass of
+                # HTML::Mason::Request::ApacheHandler
+                $self->apache_req->err_header_out( 'Set-Cookie' => $cookie );
+            }
+            elsif ( $self->can('cgi_request') )
+            {
+                # works when we're a subclass of
+                # HTML::Mason::Request::CGIHandler
+                $self->cgi_request->header_out( 'Set-Cookie' => $cookie );
+            }
+            else
+            {
+                # no way to set headers!
+                die "Cannot set cookie headers when using CGI::Cookie without any object to set them on.";
+            }
+        }
+    }
+
+    # always set this even if we skipped actually setting the cookie
+    # to avoid resending it.  this keeps us from entering this method
+    # over and over
     $self->{session_cookie_is_baked} = 1;
 }
 
@@ -543,9 +586,7 @@ sub _cleanup_session
 
     if ( $self->{session_always_write} )
     {
-	$self->{session}{___force_a_write___} ||= 0;
-
-	if ( $self->{session}->{___force_a_write___} == 1 )
+	if ( $self->{session}->{___force_a_write___} )
 	{
 	    $self->{session}{___force_a_write___} = 0;
 	}
@@ -621,7 +662,7 @@ cookie in the browser.
 This module accepts quite a number of parameters, most of which are
 simply passed through to C<Apache::Session>.  For this reason, you are
 advised to familiarize yourself with the C<Apache::Session>
-documentation before attempting to configure tihs module.
+documentation before attempting to configure this module.
 
 =head2 Generic Parameters
 
@@ -690,6 +731,14 @@ Corresponds to the "-path" parameter.  It defaults to "/".
 =item * session_cookie_secure / MasonSessionCookieSecure  =>  boolean
 
 Corresponds to the "-secure" parameter.  It defaults to false.
+
+=item * session_cookie_resend / MasonSessionCookieResend  =>  boolean
+
+If this is true, then the cookie will be sent every time the session
+is I<accessed>.  Otherwise, the cookie will only be sent when the
+session is I<created>.  This is important as resending the cookie has
+the effect of updating the expiration time.  It defaults to true
+(resend cookies).
 
 =back
 
@@ -814,6 +863,18 @@ Corresponds to the C<SavePath> parameter given to
 C<Apache::Session::PHP>.
 
 =back
+
+=head1 HOW COOKIES ARE HANDLED
+
+When run under the ApacheHandler module, this module attempts to first
+use C<Apache::Cookie> for cookie-handling.  Otherwise it uses
+C<CGI::Cookie> as a fallback.
+
+If it ends up using C<CGI::Cookie> then it can only set cookies if it
+is running under either the ApacheHandler or the CGIHandler module.
+Otherwise, the C<MasonX::Request::WithApacheSession> request object
+has no way to get to an object which can take the headers.  In other
+words, if there's no C<$r>, there's nothing with which to set headers.
 
 =head1 BUGS
 
