@@ -5,7 +5,7 @@ use strict;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.30';
+$VERSION = '0.31';
 
 use Apache::Session::Wrapper 0.13;
 
@@ -74,7 +74,7 @@ sub new
 
     my $self = $class->SUPER::new(@_);
 
-    return if $self->is_subrequest;
+    return $self if $self->is_subrequest;
 
     # backwards compatibility
     $self->{session_param_name} =
@@ -87,9 +87,9 @@ sub new
                    param_object  => $self->apache_req,
                  );
     }
-    elsif ( $self->can('cgi_object') )
+    elsif ( $self->can('cgi_process') )
     {
-        %extra = ( header_object => $self->cgi_object,
+        %extra = ( header_object => $self->cgi_request,
                    param_object  => $self->cgi_object,
                  );
     }
@@ -271,6 +271,10 @@ more details.
 =head1 AUTHOR
 
 Dave Rolsky, <autarch@urth.org>
+
+=head1 MAINTAINER
+
+Brad Lhotsky, <blhotsky@cpan.org>
 
 =head1 SEE ALSO
 

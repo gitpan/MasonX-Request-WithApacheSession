@@ -9,5 +9,4 @@ README
 t/01-basic.t
 t/03-multi.t
 t/99-pod.t
-
 SIGNATURE    Added here by Module::Build

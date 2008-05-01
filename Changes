@@ -1,3 +1,8 @@
+0.31 December 18, 2007
+
+- Patch by Michael Scoltock (scoltock . at . ictp.it ) to fix subexec
+- Patch submitted as guest user to fix the CGI Environment Problems.
+
 0.30  March 19, 2004
 
 - MasonX::Request::WithApacheSession is now a very thin wrapper around
